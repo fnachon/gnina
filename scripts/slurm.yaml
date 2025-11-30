@@ -1,0 +1,58 @@
+jobqueue:
+  slurm:
+    # ---------- Dask worker resources (from your SLURMCluster) ----------
+    name: dask-worker
+    queue: "dept_cpu,dept_gpu,bahar_gpu"
+    cores: 4              # total cores per job (= per worker)
+    processes: 1           # 1 process per job
+    memory: "5GB"         # Dask worker memory limit, split between processes
+    walltime: "72:00:00"
+    local-directory: "/scr/"
+
+    # ---------- SLURM job directives ----------
+    job-extra-directives:
+      - "--output=/dev/null"
+      - "--error=/dev/null"
+   #   - "--output=slurm_out/%x-%j.out"
+   #   - "--error=slurm_out/%x-%j.err" 
+      - "--mem=7GB"
+      # - "--exclude=n033,n034,n037,n038,n039,n040"   # uncomment if you want this
+
+    # ---------- Commands run *before* starting dask-worker ----------
+    job-script-prologue:
+      - 'eval "$(conda shell.bash hook)"'
+      - "conda activate ultrafast"
+      - "module load cuda"
+      - "ulimit -n 60000"
+
+    # ---------- Extra args to dask-worker (exactly your worker_extra_args) ----------
+    worker-extra-args:
+      - "--lifetime"
+      - "4300m"
+      - "--lifetime-stagger"
+      - "5m"
+      - "--death-timeout"
+      - "600"
+
+    # ---------- Scheduler options (your scheduler_options) ----------
+    scheduler-options:
+      dashboard_address: ":9009"
+
+distributed:
+
+  # ---------- Scheduler behaviour ----------
+  scheduler:
+    # How long a worker can go without a heartbeat before being considered dead
+    # (default ~5min; bumping to 3min for long C++-bound tasks)
+    worker-ttl: 180s   # or null for "never" if you prefer
+
+  # ---------- Network / comm timeouts ----------
+  comm:
+    timeouts:
+      connect: 120s    # allow slow connections
+      tcp: 180s        # allow slow data transfers
+
+
+  # ---------- Scratch space ----------
+  temporary-directory: "/scr/"
+  worker-temp-directory: "/scr/"
