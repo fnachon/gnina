@@ -47,7 +47,12 @@ GenericMetal Boron Manganese Magnesium Zinc Calcium Iron
 
 /** Read in a torch script model from the provided stream */
 template <bool isCUDA> TorchModel<isCUDA>::TorchModel(std::istream &in, const string &name, tee *log) {
+#ifdef USE_METAL
+  // Under Metal: GPU path uses MPS (Apple Neural Engine / GPU via PyTorch MPS backend).
+  c10::Device device = isCUDA ? c10::Device(c10::DeviceType::MPS) : c10::Device(torch::kCPU);
+#else
   c10::Device device = isCUDA ? torch::kCUDA : torch::kCPU;
+#endif
   try {
     // Deserialize the ScriptModule from a file using torch::jit::load().
     torch::jit::ExtraFilesMap extras;
@@ -175,10 +180,22 @@ std::vector<float> TorchModel<isCUDA>::forward(const std::vector<float3> &rec_co
   long ntypes = combined.num_types();
   long gd = gmaker.get_first_dim();
 
+#ifdef USE_METAL
+  // Under Metal, libmolgrid only supports CPU grids (no MPS/CUDA backend).
+  // Build on CPU, then move to MPS for model inference.
+  c10::Device mps_dev = isCUDA ? c10::Device(c10::DeviceType::MPS) : c10::Device(torch::kCPU);
+  auto cpu_opts = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+  torch::Tensor gtensor_cpu = torch::zeros({1, ntypes, gd, gd, gd}, cpu_opts);
+  Grid<float, 4, false> out(gtensor_cpu.data_ptr<float>(), ntypes, gd, gd, gd);
+  gmaker.forward(gcenter, combined, out);
+  // Move to MPS and mark as requiring grad (leaf tensor on MPS device).
+  torch::Tensor gtensor = gtensor_cpu.to(mps_dev).requires_grad_(compute_gradient);
+#else
   auto options = torch::TensorOptions().dtype(torch::kFloat32).device(isCUDA ? torch::kCUDA : torch::kCPU).requires_grad(compute_gradient);
   torch::Tensor gtensor = torch::zeros({1, ntypes, gd, gd, gd}, options);
   Grid<float, 4, isCUDA> out(gtensor.data_ptr<float>(), ntypes, gd, gd, gd);
   gmaker.forward(gcenter, combined, out);
+#endif
 
   // evaluate model
   vector<torch::jit::IValue> inputs{gtensor};
@@ -186,20 +203,32 @@ std::vector<float> TorchModel<isCUDA>::forward(const std::vector<float3> &rec_co
 
   // get results
   auto pose_logit = result[0].toTensor();
-  auto pose = skip_softmax ? pose_logit.index({0,1}).item<float>() : torch::softmax(pose_logit, 1).index({0, 1}).item<float>();
-  auto affinity = result[1].toTensor()[0].item<float>();
+  auto pose = skip_softmax ? pose_logit.index({0,1}).template item<float>() : torch::softmax(pose_logit, 1).index({0, 1}).template item<float>();
+  auto affinity = result[1].toTensor()[0].template item<float>();
 
+#ifdef USE_METAL
+  auto loptions = torch::TensorOptions().dtype(torch::kLong).device(mps_dev);
+#else
   auto loptions = torch::TensorOptions().dtype(torch::kLong).device(isCUDA ? torch::kCUDA : torch::kCPU);
+#endif
   torch::Tensor labels = torch::ones({1}, loptions);
 
   auto loss = apply_logistic_loss ? -torch::log(pose_logit.index({0,1})) : torch::cross_entropy_loss(pose_logit, labels);
 
   if (compute_gradient) {
-    loss.backward(); 
+    loss.backward();
+#ifdef USE_METAL
+    // Gradient is on MPS — bring it back to CPU for libmolgrid backward.
+    auto grad = gtensor.grad().to(torch::kCPU);
+    Grid<float, 4, false> gridgrad(grad.data_ptr<float>(), ntypes, gd, gd, gd);
+    MGrid2f atomic_gradients(combined.size(),3);
+    auto coord_grad = get2DGrid<false>(atomic_gradients);
+#else
     auto grad = gtensor.grad();
     Grid<float, 4, isCUDA> gridgrad(grad.data_ptr<float>(), ntypes, gd, gd, gd);
     MGrid2f atomic_gradients(combined.size(),3);
     auto coord_grad = get2DGrid<isCUDA>(atomic_gradients);
+#endif
     gmaker.backward(gcenter,combined, gridgrad, coord_grad);
     if(rotate) {
       transform.backward(coord_grad,coord_grad,false);
@@ -219,7 +248,7 @@ std::vector<float> TorchModel<isCUDA>::forward(const std::vector<float3> &rec_co
     }
 
   }
-  vector<float> scores{pose, affinity, loss.item<float>()};
+  vector<float> scores{pose, affinity, loss.template item<float>()};
   return scores;
 }
 

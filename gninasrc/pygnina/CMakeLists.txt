@@ -10,8 +10,19 @@ if(BUILD_CONTAINED_PYTHON)
   set(Boost_USE_STATIC_LIBS ON)
 endif()
 
-find_package( Boost COMPONENTS system filesystem python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR} REQUIRED )
-find_package( NumPy )
+# boost_system is header-only since Boost 1.69 and has no cmake config
+find_package( Boost COMPONENTS filesystem python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR} REQUIRED )
+find_package(Python3 COMPONENTS NumPy QUIET)
+if(Python3_NumPy_FOUND)
+  set(PYTHON_NUMPY_INCLUDE_DIR ${Python3_NumPy_INCLUDE_DIRS})
+else()
+  # Fall back to asking the interpreter (works even without cmake NumPy module)
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
+    OUTPUT_VARIABLE PYTHON_NUMPY_INCLUDE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${PROJECT_SOURCE_DIR}/src)
@@ -41,15 +52,25 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pygnina/")
 # link
 
 # create a python library 
-add_link_options("LINKER:--exclude-libs,ALL")  # avoid exporting  symbols
+if(NOT APPLE)
+  add_link_options("LINKER:--exclude-libs,ALL")  # avoid exporting symbols (GNU ld only)
+endif()
 add_library(pygnina SHARED ${PYGNINA_SOURCES})
 target_link_libraries(pygnina ${Boost_LIBRARIES} ${CUDA_LIBRARIES} gninalib_static )
 
 
 # Suppress prefix "lib" because Python does not allow this prefix
-set_target_properties(pygnina PROPERTIES 
+set_target_properties(pygnina PROPERTIES
 									PREFIX ""
 									LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/pygnina/")
+
+if(APPLE)
+  # On macOS the linker requires all symbols to be resolved at link time.
+  # Python extension modules intentionally leave Python/Boost.Python symbols
+  # unresolved (they are provided by the host interpreter at load time).
+  # -undefined dynamic_lookup defers resolution to runtime, matching Linux behaviour.
+  set_target_properties(pygnina PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+endif()
 									
                   
 # copy module code

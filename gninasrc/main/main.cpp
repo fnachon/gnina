@@ -26,7 +26,6 @@
 #include <openbabel/obconversion.h>
 #include <openbabel/parsmart.h>
 #include <string>
-#include <torch/torch.h>
 #include <vector> // ligand paths
 
 #include "array3d.h"
@@ -63,7 +62,9 @@
 #include "version.h"
 #include "weighted_terms.h"
 
+#ifndef USE_METAL
 #include <cuda_profiler_api.h>
+#endif
 
 using namespace boost::iostreams;
 using boost::filesystem::path;

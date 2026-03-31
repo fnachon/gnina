@@ -28,7 +28,7 @@ for model in models.split(';'):
     name = name.replace('.','_')
     names.append(name)
     out.write(f'''extern char _binary_lib_models_{name}_pt_start[];
-extern char _binary_lib_models_{name}_pt_end[];
+extern char* _binary_lib_models_{name}_pt_end;
 
 ''')
 
