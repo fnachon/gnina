@@ -119,12 +119,20 @@ brew install cmake boost jsoncpp open-babel eigen
 git clone https://github.com/fnachon/gnina.git
 cd gnina
 mkdir build_metal && cd build_metal
-cmake -DUSE_METAL=ON ..
+cmake -DUSE_METAL=ON -DPYTHON_EXECUTABLE=/opt/homebrew/bin/python3.14 ..
 make -j$(sysctl -n hw.logicalcpu)
 sudo make install
 ```
 
 This installs gnina to `/usr/local` by default. To change the installation prefix, pass `-DCMAKE_INSTALL_PREFIX=/your/path` to the `cmake` command above.
+
+> **Note on Python:** Homebrew's `boost` bottle is compiled against Python 3.14, so `-DPYTHON_EXECUTABLE` must point to the matching Homebrew Python. Using a conda environment with a different Python version (e.g. 3.10) will cause a `boost_python` version mismatch error during CMake configuration.
+
+> **Skipping pygnina:** If you only need the `gnina` command-line tool and not the Python API, you can skip the `pygnina` module entirely to avoid Python version constraints:
+> ```bash
+> cmake -DUSE_METAL=ON -DBUILD_PYGNINA=OFF ..
+> ```
+
 
 CMake automatically downloads and builds:
 - [libtorch](https://pytorch.org) 2.10 (macOS ARM, MPS-enabled) — no manual install needed
@@ -134,14 +142,19 @@ The Metal shaders (`gnina_kernels.metal`) are compiled during the build via `xcr
 
 **Usage**
 
-gnina runs normally on macOS. Pass `--no_gpu` to suppress the GPU-not-detected warning (GPU docking is CUDA-only; empirical and CNN scoring both work on CPU):
+CPU docking with CNN scoring (default):
 ```bash
-./bin/gnina -r rec.pdb -l lig.sdf --autobox_ligand lig.sdf -o docked.sdf --no_gpu
+gnina -r rec.pdb -l lig.sdf --autobox_ligand lig.sdf -o docked.sdf
 ```
 
-CNN scoring with the default ensemble or any built-in model works out of the box:
+CNN scoring with the default ensemble or any built-in model:
 ```bash
-./bin/gnina -r rec.pdb -l lig.sdf --autobox_ligand lig.sdf --cnn_scoring rescore -o docked.sdf --no_gpu
+gnina -r rec.pdb -l lig.sdf --autobox_ligand lig.sdf --cnn_scoring rescore -o docked.sdf
+```
+
+GPU-accelerated docking via Metal:
+```bash
+gnina -r rec.pdb -l lig.sdf --autobox_ligand lig.sdf --gpu_docking -o docked.sdf
 ```
 
 **GPU-accelerated docking**

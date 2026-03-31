@@ -416,7 +416,11 @@ if(USE_METAL)
 endif()
 
 add_subdirectory(gninaserver)
-add_subdirectory(pygnina)
+
+option(BUILD_PYGNINA "Build the pygnina Python extension module" ON)
+if(BUILD_PYGNINA)
+  add_subdirectory(pygnina)
+endif()
 
 add_executable(fromgnina fromgnina/fromgnina.cpp lib/CommandLine2/CommandLine.cpp)
 target_link_libraries(fromgnina gninalib)

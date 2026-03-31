@@ -80,8 +80,16 @@ endforeach()
 
 
 
-# Copy the setup.py file
-configure_file(setup.py ${CMAKE_CURRENT_BINARY_DIR}/setup.py)
+# Determine site-packages destination using the selected Python interpreter
+execute_process(
+  COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('platlib', vars={'platbase': '${CMAKE_INSTALL_PREFIX}', 'base': '${CMAKE_INSTALL_PREFIX}'}))"
+  OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 
-#TODO: figure out reasonable install, also how to build both python2 and python3
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/setup.py install --prefix ${CMAKE_INSTALL_PREFIX})")
+install(TARGETS pygnina
+  LIBRARY DESTINATION "${PYTHON_SITE_PACKAGES}/pygnina"
+)
+install(FILES ${PYGNINA_PY}
+  DESTINATION "${PYTHON_SITE_PACKAGES}/pygnina"
+)
