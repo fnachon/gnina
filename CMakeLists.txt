@@ -158,7 +158,21 @@ if(NOT Torch_FOUND)
   list(APPEND CMAKE_PREFIX_PATH "${libtorch_SOURCE_DIR}")
   find_package(Torch REQUIRED)
 
-  if(NOT USE_METAL)
+  if(USE_METAL)
+    # Install macOS torch dylibs so the installed binary can find them via RPATH
+    cmake_path(GET TORCH_LIBRARY PARENT_PATH TORCH_LIBDIR)
+    set(TORCH_NEEDED
+      libc10.dylib
+      libomp.dylib
+      libshm.dylib
+      libtorch.dylib
+      libtorch_cpu.dylib
+      libtorch_global_deps.dylib
+      libtorch_python.dylib
+    )
+    list(TRANSFORM TORCH_NEEDED PREPEND "${TORCH_LIBDIR}/")
+    install(FILES ${TORCH_NEEDED} DESTINATION lib/gnina)
+  elseif(NOT USE_METAL)
     # Install CUDA-specific torch shared libraries (Linux only)
     cmake_path(GET TORCH_LIBRARY PARENT_PATH TORCH_LIBDIR)
     set(TORCH_NEEDED
