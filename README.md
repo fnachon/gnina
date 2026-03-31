@@ -154,7 +154,7 @@ Passing `--gpu_docking` enables Metal GPU acceleration for the docking search it
 Without `--gpu_docking` (the default), docking runs entirely on CPU.
 
 **Known limitations**
-- CNN scoring runs on CPU. The MPS backend (Apple GPU) is available in the bundled PyTorch but not yet wired to gnina's CNN inference path.
+- CNN scoring runs on the Metal GPU (MPS backend) when available, falling back to CPU if not detected.
 - `sem_init` is unavailable on macOS; the build uses a portable `std::mutex`-based semaphore instead (transparent to users).
 
 ### [WSL2 Ubuntu 22.04](https://github.com/gnina/gnina/issues/247)
