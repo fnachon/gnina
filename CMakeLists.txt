@@ -262,24 +262,10 @@ if(NOT LIBMOLGRID_LIBRARY)
       "#!/bin/bash\n"
       "SRC=$1\n"
       "set -e\n"
-      "# Disable unused subdirectories\n"
+      "# Disable unused subdirectories (not guarded by options in the fork's CMakeLists.txt)\n"
       "sed -i '' 's/add_subdirectory(python)/# add_subdirectory(python)/' \"$SRC/CMakeLists.txt\"\n"
       "sed -i '' 's/add_subdirectory(test)/# add_subdirectory(test)/' \"$SRC/CMakeLists.txt\"\n"
       "sed -i '' 's/add_subdirectory(docs)/# add_subdirectory(docs)/' \"$SRC/CMakeLists.txt\"\n"
-      "# Fix missing if(BUILD_SHARED) guard around target_compile_definitions\n"
-      "python3 - \"$SRC/src/CMakeLists.txt\" <<'PYEOF'\n"
-      "import sys, re\n"
-      "f = sys.argv[1]\n"
-      "s = open(f).read()\n"
-      "old = 'target_compile_definitions(libmolgrid_shared PRIVATE'\n"
-      "new = 'if(BUILD_SHARED)\\ntarget_compile_definitions(libmolgrid_shared PRIVATE'\n"
-      "s = s.replace(old, new, 1)\n"
-      "s = re.sub(\n"
-      "    r'(METAL_LIBRARY_PATH=\"\\$\\{CMAKE_CURRENT_BINARY_DIR\\}/libmolgrid_shaders\\.metallib\"\\))(?!\\nendif)',\n"
-      "    r'\\1\\nendif()',\n"
-      "    s, count=1)\n"
-      "open(f, 'w').write(s)\n"
-      "PYEOF\n"
     )
     execute_process(COMMAND chmod +x ${CMAKE_BINARY_DIR}/patch_libmolgrid.sh)
 
@@ -289,7 +275,8 @@ if(NOT LIBMOLGRID_LIBRARY)
       PATCH_COMMAND ${CMAKE_BINARY_DIR}/patch_libmolgrid.sh <SOURCE_DIR>
       CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LOCATION}
-        -DBUILD_PYTHON=OFF
+        -DLIBMOLGRID_ENABLE_CUDA=OFF
+        -DLIBMOLGRID_ENABLE_METAL=ON
         -DOPENBABEL3_INCLUDE_DIR=/opt/homebrew/include/openbabel3
         -DOPENBABEL3_LIBRARIES=/opt/homebrew/lib/libopenbabel.dylib
     )
